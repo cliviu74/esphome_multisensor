@@ -1,0 +1,77 @@
+esphome:
+  name: multisensor
+  platform: ESP8266
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+time:
+  - platform: sntp
+    id: ntp_time
+
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: D3
+      mode: INPUT_PULLUP
+      inverted: True
+    name: "DoorBell Button"
+    id: doorbell_button
+    filters:
+      - delayed_on: 10ms
+
+switch:
+  - platform: gpio
+    name: "DoorBell Chime"
+    id: doorbell_chime
+    pin: D2
+    internal: True
+  - platform: template
+    name: "DoorBell Chime Push"
+    turn_on_action:
+    - switch.turn_on: doorbell_chime
+    - delay: 500ms
+    - switch.turn_off: doorbell_chime
+
+sensor:
+  - platform: adc
+    pin: A0
+    name: "Power Meter ADC Sensor"
+    update_interval: 10s
+    internal: True
+
+  - platform: ct_clamp
+    sensor: adc_adcsensor
+    name: "Power Meter Current"
+    id: power_meter_current
+    update_interval: 10s
+    filters:
+      - calibrate_linear:
+          # Measured value of 0 maps to 0A
+          - 0 -> 0
+          # Known load: 1.32A
+          # Value shown in logs: 0.00353A
+          - 0.00353 -> 1.32
+  
+  - platform: template
+    name: "Power Meter Watt"
+    id: power_meter_watt
+    lambda: |- 
+      const float MAINS_VOLTAGE = 230.0;
+      return (id(power_meter_current).state * MAINS_VOLTAGE);
+    update_interval: 10s
+    accuracy_decimals: 2
+    unit_of_measurement: "W"
+  
+  - platform: total_daily_energy
+    name: "Total Daily Energy"
+    power_id: power_meter_watt
